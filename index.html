@@ -125,6 +125,12 @@
         >
           <i class="fas fa-warehouse mr-3"></i> Main Warehouse
         </a>
+        <a
+          href="#branches-overview"
+          class="flex items-center py-2.5 px-4 rounded transition duration-200 hover:bg-gray-700 nav-link"
+        >
+          <i class="fas fa-sitemap mr-3"></i> Branches Overview
+        </a>
         <div id="branch-links"></div>
         <a
           href="#transactions"
@@ -257,6 +263,80 @@
                   <tbody id="low-stock-table"></tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="branches-overview-view" class="view hidden">
+          <h2 class="text-3xl font-bold text-gray-800 mb-6">
+            Branches Overview
+          </h2>
+
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6"
+          >
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-gray-500 text-sm font-medium">
+                Total Items in Branches
+              </h3>
+              <p
+                id="branch-total-items"
+                class="text-3xl font-bold text-gray-800"
+              >
+                0
+              </p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-gray-500 text-sm font-medium">
+                Total Value in Branches
+              </h3>
+              <p
+                id="branch-total-value"
+                class="text-3xl font-bold text-gray-800"
+              >
+                $0
+              </p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-gray-500 text-sm font-medium">
+                Unique Item Types
+              </h3>
+              <p
+                id="branch-unique-items"
+                class="text-3xl font-bold text-gray-800"
+              >
+                0
+              </p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+              <h3 class="text-gray-500 text-sm font-medium">
+                Branches with Low Stock
+              </h3>
+              <p
+                id="branch-low-stock-count"
+                class="text-3xl font-bold text-red-500"
+              >
+                0
+              </p>
+            </div>
+          </div>
+
+          <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <h3 class="text-lg font-semibold p-4 border-b">Branch Breakdown</h3>
+            <div class="table-container">
+              <table class="w-full text-sm text-left text-gray-500">
+                <thead
+                  class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0"
+                >
+                  <tr>
+                    <th scope="col" class="px-6 py-3">Branch Name</th>
+                    <th scope="col" class="px-6 py-3">Total Items</th>
+                    <th scope="col" class="px-6 py-3">Total Value</th>
+                    <th scope="col" class="px-6 py-3">Low Stock Count</th>
+                  </tr>
+                </thead>
+                <tbody id="branch-breakdown-table"></tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -556,7 +636,7 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        // --- DATA MANAGEMENT (no changes) ---
+        // --- DATA MANAGEMENT ---
         const getInitialData = (key, defaultValue) => {
           const storedData = localStorage.getItem(key);
           return storedData ? JSON.parse(storedData) : defaultValue;
@@ -565,7 +645,7 @@
           localStorage.setItem(key, JSON.stringify(data));
         };
 
-        // --- STATE MANAGEMENT (no changes) ---
+        // --- STATE MANAGEMENT ---
         let state = {
           items: getInitialData("items", [
             {
@@ -662,7 +742,6 @@
         );
 
         // --- RENDER FUNCTIONS ---
-        // UPDATED: renderItems now adds data-label for responsive cards
         const renderItems = (container, items, locationName) => {
           container.innerHTML = "";
           if (items.length === 0) {
@@ -705,7 +784,6 @@
           });
         };
 
-        // --- Other Render Functions (no major changes needed) ---
         const renderBranches = () => {
           branchList.innerHTML = "";
           state.branches.forEach((branch) => {
@@ -805,6 +883,89 @@
             lowStockTable.appendChild(row);
           });
         };
+
+        const renderBranchesOverview = () => {
+          // 1. Get all items from all branches into one single array
+          const allBranchItems = state.branches.flatMap((b) => b.items);
+
+          // 2. Calculate the main summary stats
+          const totalItems = allBranchItems.reduce(
+            (sum, item) => sum + item.quantity,
+            0
+          );
+          const totalValue = allBranchItems.reduce(
+            (sum, item) => sum + item.quantity * item.price,
+            0
+          );
+
+          // Use a Set to easily find unique item names
+          const uniqueItemTypes = new Set(
+            allBranchItems.map((item) => item.name)
+          ).size;
+
+          const lowStockBranches = new Set();
+          state.branches.forEach((branch) => {
+            const hasLowStock = branch.items.some(
+              (item) => item.quantity <= state.lowStockThreshold
+            );
+            if (hasLowStock) {
+              lowStockBranches.add(branch.name);
+            }
+          });
+
+          // 3. Update the summary cards in the HTML
+          document.getElementById("branch-total-items").textContent =
+            totalItems;
+          document.getElementById(
+            "branch-total-value"
+          ).textContent = `$${totalValue.toLocaleString("en-US")}`;
+          document.getElementById("branch-unique-items").textContent =
+            uniqueItemTypes;
+          document.getElementById("branch-low-stock-count").textContent =
+            lowStockBranches.size;
+
+          // 4. Populate the branch-by-branch breakdown table
+          const breakdownTable = document.getElementById(
+            "branch-breakdown-table"
+          );
+          breakdownTable.innerHTML = ""; // Clear existing rows
+
+          if (state.branches.length === 0) {
+            breakdownTable.innerHTML = `<tr><td colspan="4" class="text-center py-4">No branches found.</td></tr>`;
+            return;
+          }
+
+          state.branches.forEach((branch) => {
+            const branchTotalItems = branch.items.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            );
+            const branchTotalValue = branch.items.reduce(
+              (sum, item) => sum + item.quantity * item.price,
+              0
+            );
+            const branchLowStockCount = branch.items.filter(
+              (item) => item.quantity <= state.lowStockThreshold
+            ).length;
+
+            const row = document.createElement("tr");
+            row.className = "bg-white border-b hover:bg-gray-50";
+            row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-gray-900">${
+                      branch.name
+                    }</td>
+                    <td class="px-6 py-4">${branchTotalItems}</td>
+                    <td class="px-6 py-4">$${branchTotalValue.toLocaleString(
+                      "en-US"
+                    )}</td>
+                    <td class="px-6 py-4 ${
+                      branchLowStockCount > 0 ? "text-red-500 font-bold" : ""
+                    }">${branchLowStockCount}</td>
+                `;
+            breakdownTable.appendChild(row);
+          });
+        };
+
         const renderTransactions = () => {
           const tableBody = document.getElementById(
             "transaction-history-table"
@@ -840,7 +1001,7 @@
             });
         };
 
-        // --- LOGIC FUNCTIONS (with UI permission updates) ---
+        // --- LOGIC FUNCTIONS ---
         const updateUIPermissions = () => {
           const isBranchView = window.location.hash.startsWith("#branch-");
           const isAdmin = state.currentUserRole === "admin";
@@ -887,6 +1048,11 @@
             }
           } else {
             switch (hash) {
+              case "#branches-overview":
+                currentView = document.getElementById("branches-overview-view");
+                title = "Branches Overview";
+                renderBranchesOverview();
+                break;
               case "#warehouse":
                 currentView = document.getElementById("item-view");
                 title = "Main Warehouse";
@@ -928,7 +1094,6 @@
           updateUIPermissions();
         };
 
-        // --- Core logic functions (Add, Edit, Delete, Transfer - no changes)
         const openModal = (modal) => (modal.style.display = "flex");
         const closeModal = (modal) => (modal.style.display = "none");
         const logTransaction = (type, itemName, details) => {
